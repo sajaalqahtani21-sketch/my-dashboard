@@ -1,0 +1,80 @@
+# app.py
+import streamlit as st
+import pandas as pd
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+st.set_page_config(page_title="Narjis Dashboard", layout="wide")
+
+@st.cache_resource
+def load_model():
+    model_name = "aubmindlab/bert-base-arabertv02-twitter"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    return tokenizer, model
+
+tokenizer, model = load_model()
+
+def analyze_sentiment(text):
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+    outputs = model(**inputs)
+    pred = torch.argmax(outputs.logits).item()
+    if pred == 0:
+        return "سلبي", -1
+    elif pred == 1:
+        return "محايد", 0
+    else:
+        return "إيجابي", 1
+
+def classify_issue(text):
+    if "زحمة" in text:
+        return "مرور"
+    elif "مدارس" in text:
+        return "تعليم"
+    elif "صحي" in text:
+        return "صحة"
+    elif "إنارة" in text:
+        return "بنية تحتية"
+    elif "نت" in text:
+        return "اتصالات"
+    elif "حدائق" in text:
+        return "جودة حياة"
+    return "عام"
+
+st.title("📊 Narjis Smart Dashboard")
+
+user_input = st.text_area("اكتب رأي:")
+if st.button("تحليل"):
+    s, sc = analyze_sentiment(user_input)
+    issue = classify_issue(user_input)
+    st.success(f"{s}")
+    st.info(f"{issue}")
+
+data = [
+    "حي النرجس ما شاء الله تبارك الله، عمران وتطور سريع جداً في سنتين.",
+    "للأسف الحي صار زحمة مرة ومداخل النرجس صارت لا تطاق في وقت الذروة.",
+    "سكنت بالنرجس من ٤ شهور وللحين ما فيه ألياف بصرية، النت جداً ضعيف.",
+    "الحي جميل وهادئ وتوفر الخدمات التموينية فيه صار ممتاز مؤخراً.",
+    "متى يفتح المركز الصحي في شمال النرجس؟ تعبنا نطلع للأحياء البعيدة.",
+    "الإنارة في الشوارع الداخلية ضعيفة جداً وتسبب قلق للسكان بالليل.",
+    "المدارس الحكومية في الحي ممتلئة تماماً، نحتاج مدارس إضافية فوراً.",
+    "أجمل ما في النرجس قربه من المطار ومن مراكز الفعاليات الجديدة.",
+    "الحي يفتقر للحدائق والتشجير، نحتاج متنفس للعوائل وسط هالمباني.",
+    "الحمد لله تم افتتاح جامع كبير بالحي، عقبال باقي الخدمات الأساسية."
+]
+
+rows = []
+for t in data:
+    s, sc = analyze_sentiment(t)
+    issue = classify_issue(t)
+    rows.append([t, s, sc, issue])
+
+df = pd.DataFrame(rows, columns=["النص","التصنيف","Score","المجال"])
+
+st.dataframe(df)
+
+st.subheader("📊 المؤشرات")
+st.metric("نسبة الرضا", f"{(df['Score']>0).mean()*100:.1f}%")
+st.metric("المؤشر العام", f"{df['Score'].mean()*100:.1f}%")
+
+st.bar_chart(df["المجال"].value_counts())
